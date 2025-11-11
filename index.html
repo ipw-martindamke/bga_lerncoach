@@ -1832,16 +1832,36 @@
     }
 
     function getRandomCase() {
-      let available = CASES;
-      if (currentMode === 'basic') {
-        available = CASES.filter(c => c.mode === 'basic');
-      } else if (currentMode === 'advanced') {
-        available = CASES.filter(c => c.mode === 'advanced');
+      // SPRINT 3: Nicht mehr komplett zufällig, sondern adaptiv
+      const optimalCase = LearningManager.getOptimalNextCase(currentMode);
+      
+      // Zeige optional die Begründung (nur bei bestimmten Gründen)
+      if (optimalCase.message && (optimalCase.reason === 'repetition' || optimalCase.reason === 'motivation' || optimalCase.reason === 'weakness')) {
+        showCaseSelectionHint(optimalCase.message);
       }
-      const filtered = available.filter((c, idx) => CASES.indexOf(c) !== currentIndex);
-      if (filtered.length === 0) return Math.floor(Math.random() * available.length);
-      const randomCase = filtered[Math.floor(Math.random() * filtered.length)];
-      return CASES.indexOf(randomCase);
+      
+      // Finde den Index des Falls in CASES Array
+      const caseIndex = CASES.findIndex(c => c.id === optimalCase.caseId);
+      return caseIndex !== -1 ? caseIndex : Math.floor(Math.random() * CASES.length);
+    }
+    
+    // Zeigt einen dezenten Hinweis warum dieser Fall gewählt wurde
+    function showCaseSelectionHint(message) {
+      const contextDiv = document.getElementById('clinical-context');
+      
+      // Füge den Hinweis temporär über dem klinischen Kontext ein
+      const hint = document.createElement('div');
+      hint.style.cssText = 'background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 0.875rem;';
+      hint.innerHTML = `<strong>💡 Fallauswahl:</strong> ${message}`;
+      
+      contextDiv.parentNode.insertBefore(hint, contextDiv);
+      
+      // Entferne Hinweis nach 8 Sekunden
+      setTimeout(() => {
+        hint.style.transition = 'opacity 0.5s';
+        hint.style.opacity = '0';
+        setTimeout(() => hint.remove(), 500);
+      }, 8000);
     }
 
     function renderCase(index) {
@@ -2137,6 +2157,15 @@
       
       let html = '<div class="stats-section">';
       html += '<h3>📈 Gesamtübersicht</h3>';
+      
+      // Adaptive Lernstrategie Hinweis
+      html += '<div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 0.85rem;">';
+      html += '🧠 <strong>Adaptive Lernstrategie aktiv:</strong> ';
+      html += 'Das Tool wählt die nächsten Fälle intelligent basierend auf deinem Fortschritt. ';
+      html += 'Du bekommst Wiederholungen nach wissenschaftlich bewährten Intervallen, ';
+      html += 'gezieltes Training für Schwachstellen und regelmäßig neue Herausforderungen.';
+      html += '</div>';
+      
       html += '<div class="stats-grid">';
       
       html += '<div class="stat-item">';
@@ -2160,6 +2189,16 @@
       html += '</div>';
       
       html += '</div>'; // stats-grid
+      
+      // Spaced Repetition Info
+      const dueRepetitions = LearningManager.getDueForRepetition();
+      if (dueRepetitions.length > 0) {
+        html += '<div style="margin-top: 12px; padding: 10px; background: rgba(251, 191, 36, 0.3); border-radius: 6px; font-size: 0.85rem;">';
+        html += `⏰ <strong>${dueRepetitions.length} Fall${dueRepetitions.length !== 1 ? 'e' : ''} zur Wiederholung fällig!</strong> `;
+        html += 'Diese wirst du beim Üben bevorzugt sehen.';
+        html += '</div>';
+      }
+      
       html += '</div>'; // stats-section
       
       return html;
