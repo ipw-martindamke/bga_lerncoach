@@ -231,6 +231,85 @@
     .hidden {
       display: none;
     }
+    
+    /* Sprint 2: Dashboard Styles */
+    .stats-section {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .stats-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    
+    .stat-item {
+      background: rgba(255, 255, 255, 0.15);
+      padding: 12px;
+      border-radius: 6px;
+    }
+    
+    .stat-label {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-bottom: 4px;
+    }
+    
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    
+    .progress-bar-container {
+      background: rgba(255, 255, 255, 0.2);
+      height: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 8px 0;
+      position: relative;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    
+    .progress-bar.excellent { background: #10b981; }
+    .progress-bar.good { background: #f59e0b; }
+    .progress-bar.needs-work { background: #ef4444; }
+    
+    .recommendation-card {
+      background: rgba(255, 255, 255, 0.15);
+      border-left: 4px solid #fbbf24;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    
+    .recommendation-card h4 {
+      margin: 0 0 6px 0;
+      font-size: 0.95rem;
+    }
+    
+    .recommendation-card p {
+      margin: 0;
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
 
   </style>
 </head>
@@ -258,13 +337,30 @@
         <h2 class="text-lg font-semibold text-gray-800 m-0">Lern-Modus</h2>
         <p class="text-gray-600 m-0 text-sm">Wähle deinen Erfahrungsgrad.</p>
       </div>
-      <div class="mode-switch">
-        <input type="radio" id="mode-basic" name="mode" value="basic" checked>
-        <label for="mode-basic">Basis</label>
-        <input type="radio" id="mode-advanced" name="mode" value="advanced">
-        <label for="mode-advanced">Advanced</label>
-        <input type="radio" id="mode-mixed" name="mode" value="mixed">
-        <label for="mode-mixed">Mixed</label>
+      <div class="flex gap-3 items-center flex-wrap">
+        <div class="mode-switch">
+          <input type="radio" id="mode-basic" name="mode" value="basic" checked>
+          <label for="mode-basic">Basis</label>
+          <input type="radio" id="mode-advanced" name="mode" value="advanced">
+          <label for="mode-advanced">Advanced</label>
+          <input type="radio" id="mode-mixed" name="mode" value="mixed">
+          <label for="mode-mixed">Mixed</label>
+        </div>
+        <button id="stats-toggle-btn" class="btn btn-secondary text-sm py-2 px-3" title="Zeige detaillierte Lernstatistiken">
+          📊 Statistiken
+        </button>
+      </div>
+    </div>
+
+    <!-- Dashboard Panel (initially hidden) -->
+    <div id="stats-dashboard" class="card hidden" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold m-0">📊 Deine Lernstatistiken</h2>
+        <button id="stats-close-btn" class="text-white hover:text-gray-200 text-2xl font-bold" style="background: none; border: none; cursor: pointer;" title="Schließen">&times;</button>
+      </div>
+      
+      <div id="stats-content" class="space-y-4">
+        <!-- Wird dynamisch gefüllt -->
       </div>
     </div>
 
@@ -581,6 +677,241 @@
           return true;
         }
         return false;
+      },
+      
+      // ========================================
+      // SPRINT 2: Erweiterte Analyse-Methoden
+      // ========================================
+      
+      // Analysiert Performance nach Störungstypen
+      getPerformanceByDisorder() {
+        const disorders = {
+          'NORMAL': { total: 0, correct: 0, label: 'Normal' },
+          'RESP_ACI': { total: 0, correct: 0, label: 'Respiratorische Azidose' },
+          'RESP_ALK': { total: 0, correct: 0, label: 'Respiratorische Alkalose' },
+          'MET_ACI': { total: 0, correct: 0, label: 'Metabolische Azidose' },
+          'MET_ALK': { total: 0, correct: 0, label: 'Metabolische Alkalose' },
+          'P_MIXED': { total: 0, correct: 0, label: 'Gemischte Störung' }
+        };
+        
+        this.profile.attempts.forEach(attempt => {
+          const correctType = attempt.correctPrimary;
+          if (disorders[correctType]) {
+            disorders[correctType].total++;
+            if (attempt.isCorrect) {
+              disorders[correctType].correct++;
+            }
+          }
+        });
+        
+        // Berechne Prozentsätze und sortiere nach Häufigkeit
+        const result = [];
+        for (const key in disorders) {
+          if (disorders[key].total > 0) {
+            const percentage = Math.round((disorders[key].correct / disorders[key].total) * 100);
+            result.push({
+              type: key,
+              label: disorders[key].label,
+              total: disorders[key].total,
+              correct: disorders[key].correct,
+              percentage: percentage,
+              status: percentage >= 80 ? 'excellent' : percentage >= 60 ? 'good' : 'needs-work'
+            });
+          }
+        }
+        
+        // Sortiere nach Anzahl der Versuche (häufigste zuerst)
+        result.sort((a, b) => b.total - a.total);
+        return result;
+      },
+      
+      // Analysiert Fehlertypen (Primärstörung vs Kompensation)
+      getErrorTypeAnalysis() {
+        const errorTypes = {
+          'none': 0,        // Alles richtig
+          'primary': 0,     // Nur Primärstörung falsch
+          'compensation': 0, // Nur Kompensation falsch
+          'both': 0         // Beides falsch
+        };
+        
+        this.profile.attempts.forEach(attempt => {
+          const type = attempt.errorType || 'unknown';
+          if (errorTypes.hasOwnProperty(type)) {
+            errorTypes[type]++;
+          }
+        });
+        
+        const total = this.profile.attempts.length;
+        
+        return {
+          primaryErrors: errorTypes.primary,
+          compensationErrors: errorTypes.compensation,
+          bothErrors: errorTypes.both,
+          totalErrors: errorTypes.primary + errorTypes.compensation + errorTypes.both,
+          primaryErrorRate: total > 0 ? Math.round((errorTypes.primary / total) * 100) : 0,
+          compensationErrorRate: total > 0 ? Math.round((errorTypes.compensation / total) * 100) : 0,
+          bothErrorRate: total > 0 ? Math.round((errorTypes.both / total) * 100) : 0,
+          // Diagnose wo das größte Problem liegt
+          mainWeakness: errorTypes.primary > errorTypes.compensation ? 'primary' : 
+                       errorTypes.compensation > errorTypes.primary ? 'compensation' : 
+                       errorTypes.both > 0 ? 'both' : 'none'
+        };
+      },
+      
+      // Erkennt Verwechslungsmuster
+      getConfusionPatterns() {
+        const confusions = {};
+        
+        this.profile.attempts.forEach(attempt => {
+          if (!attempt.isCorrect && attempt.selectedPrimary !== attempt.correctPrimary) {
+            const key = `${attempt.correctPrimary}_to_${attempt.selectedPrimary}`;
+            if (!confusions[key]) {
+              confusions[key] = {
+                correct: attempt.correctPrimary,
+                selected: attempt.selectedPrimary,
+                count: 0
+              };
+            }
+            confusions[key].count++;
+          }
+        });
+        
+        // Konvertiere zu Array und sortiere nach Häufigkeit
+        const patterns = Object.values(confusions).sort((a, b) => b.count - a.count);
+        
+        // Gib nur die häufigsten Verwechslungen zurück (mindestens 2x)
+        return patterns.filter(p => p.count >= 2).slice(0, 5);
+      },
+      
+      // Analysiert zeitlichen Trend (Verbesserung oder Stagnation)
+      getTrendAnalysis() {
+        const attempts = this.profile.attempts;
+        const total = attempts.length;
+        
+        if (total < 10) {
+          return {
+            available: false,
+            message: 'Noch zu wenig Daten für Trendanalyse (mindestens 10 Versuche nötig)'
+          };
+        }
+        
+        // Teile Versuche in zwei Hälften
+        const halfPoint = Math.floor(total / 2);
+        const firstHalf = attempts.slice(0, halfPoint);
+        const secondHalf = attempts.slice(halfPoint);
+        
+        const firstHalfCorrect = firstHalf.filter(a => a.isCorrect).length;
+        const secondHalfCorrect = secondHalf.filter(a => a.isCorrect).length;
+        
+        const firstRate = Math.round((firstHalfCorrect / firstHalf.length) * 100);
+        const secondRate = Math.round((secondHalfCorrect / secondHalf.length) * 100);
+        const improvement = secondRate - firstRate;
+        
+        let trend, message;
+        if (improvement >= 15) {
+          trend = 'strong-improvement';
+          message = 'Starke Verbesserung! Du lernst effektiv.';
+        } else if (improvement >= 5) {
+          trend = 'improvement';
+          message = 'Gute Entwicklung! Du machst Fortschritte.';
+        } else if (improvement >= -5) {
+          trend = 'stable';
+          message = 'Stabile Performance. Zeit für neue Herausforderungen?';
+        } else {
+          trend = 'declining';
+          message = 'Leichter Rückgang. Vielleicht eine Pause einlegen?';
+        }
+        
+        return {
+          available: true,
+          trend: trend,
+          firstHalfRate: firstRate,
+          secondHalfRate: secondRate,
+          improvement: improvement,
+          message: message
+        };
+      },
+      
+      // Findet die schwierigsten Fälle für diesen User
+      getHardestCases() {
+        const casePerformance = {};
+        
+        // Sammle alle Versuche pro Fall
+        this.profile.attempts.forEach(attempt => {
+          if (!casePerformance[attempt.caseId]) {
+            casePerformance[attempt.caseId] = {
+              caseId: attempt.caseId,
+              attempts: 0,
+              correct: 0,
+              lastAttempt: attempt.timestamp
+            };
+          }
+          casePerformance[attempt.caseId].attempts++;
+          if (attempt.isCorrect) {
+            casePerformance[attempt.caseId].correct++;
+          }
+          // Aktualisiere letzten Versuch
+          if (new Date(attempt.timestamp) > new Date(casePerformance[attempt.caseId].lastAttempt)) {
+            casePerformance[attempt.caseId].lastAttempt = attempt.timestamp;
+          }
+        });
+        
+        // Konvertiere zu Array und berechne Erfolgsquote
+        const cases = Object.values(casePerformance).map(c => ({
+          ...c,
+          successRate: c.attempts > 0 ? Math.round((c.correct / c.attempts) * 100) : 0
+        }));
+        
+        // Finde die schwierigsten (niedrigste Erfolgsquote, mindestens 2 Versuche)
+        const hardest = cases
+          .filter(c => c.attempts >= 2 && c.successRate < 80)
+          .sort((a, b) => a.successRate - b.successRate)
+          .slice(0, 5);
+        
+        return hardest;
+      },
+      
+      // Empfiehlt Fälle basierend auf Schwachstellen
+      getRecommendedCases() {
+        const performance = this.getPerformanceByDisorder();
+        const hardest = this.getHardestCases();
+        
+        const recommendations = [];
+        
+        // Empfehlung 1: Wiederhole schwierigste Fälle
+        if (hardest.length > 0) {
+          recommendations.push({
+            type: 'repeat-failed',
+            title: 'Wiederhole schwierige Fälle',
+            description: `Du hast bei ${hardest.length} Fällen Schwierigkeiten. Wiederholung festigt das Verständnis.`,
+            caseIds: hardest.map(h => h.caseId)
+          });
+        }
+        
+        // Empfehlung 2: Übe schwache Störungstypen
+        const weakDisorders = performance.filter(p => p.status === 'needs-work' && p.total >= 3);
+        if (weakDisorders.length > 0) {
+          const weakestDisorder = weakDisorders[0];
+          recommendations.push({
+            type: 'practice-weakness',
+            title: `Übe ${weakestDisorder.label}`,
+            description: `Deine Erfolgsquote liegt hier bei ${weakestDisorder.percentage}%. Gezielte Übung wird helfen.`,
+            disorderType: weakestDisorder.type
+          });
+        }
+        
+        // Empfehlung 3: Neue Fälle wenn Performance gut
+        const stats = this.getBasicStats();
+        if (stats.successRate >= 70 && stats.uniqueCasesWorked < CASES.length) {
+          recommendations.push({
+            type: 'explore-new',
+            title: 'Probiere neue Fälle',
+            description: `Du machst es gut (${stats.successRate}%)! Zeit für neue Herausforderungen.`,
+            caseIds: null
+          });
+        }
+        
+        return recommendations;
       }
     };
 
@@ -1472,6 +1803,10 @@
       
       handleModeChange();
       renderCase(-1);
+      
+      // Event-Listener für Dashboard
+      document.getElementById('stats-toggle-btn').addEventListener('click', toggleDashboard);
+      document.getElementById('stats-close-btn').addEventListener('click', toggleDashboard);
     };
     
     // Zeigt Willkommensnachricht mit Lernfortschritt
@@ -1528,6 +1863,268 @@
       // Mache Badge klickbar für detaillierte Statistiken
       badge.style.cursor = 'pointer';
       badge.onclick = showDetailedStats;
+    }
+    
+    // ========================================
+    // SPRINT 2: Dashboard Funktionen
+    // ========================================
+    
+    // Zeigt/versteckt das Dashboard
+    function toggleDashboard() {
+      const dashboard = document.getElementById('stats-dashboard');
+      const isHidden = dashboard.classList.contains('hidden');
+      
+      if (isHidden) {
+        const stats = LearningManager.getBasicStats();
+        if (stats.totalAttempts === 0) {
+          alert('📊 Noch keine Statistiken verfügbar.\n\nBearbeite ein paar Fälle und deine Fortschritte werden hier angezeigt!');
+          return;
+        }
+        renderDashboard();
+        dashboard.classList.remove('hidden');
+        // Scroll zum Dashboard
+        dashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        dashboard.classList.add('hidden');
+      }
+    }
+    
+    // Rendert das komplette Dashboard
+    function renderDashboard() {
+      const container = document.getElementById('stats-content');
+      const stats = LearningManager.getBasicStats();
+      
+      let html = '';
+      
+      // Sektion 1: Übersicht
+      html += renderOverviewSection(stats);
+      
+      // Sektion 2: Performance nach Störungstyp
+      html += renderDisorderPerformance();
+      
+      // Sektion 3: Fehleranalyse
+      html += renderErrorAnalysis();
+      
+      // Sektion 4: Trend-Analyse
+      html += renderTrendAnalysis();
+      
+      // Sektion 5: Verwechslungsmuster
+      html += renderConfusionPatterns();
+      
+      // Sektion 6: Empfehlungen
+      html += renderRecommendations();
+      
+      container.innerHTML = html;
+    }
+    
+    // Rendert die Übersichts-Sektion
+    function renderOverviewSection(stats) {
+      const startDate = new Date(stats.startedAt);
+      const daysSince = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      let html = '<div class="stats-section">';
+      html += '<h3>📈 Gesamtübersicht</h3>';
+      html += '<div class="stats-grid">';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Bearbeitete Fälle</div>';
+      html += `<div class="stat-value">${stats.totalAttempts}</div>`;
+      html += '</div>';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Erfolgsquote</div>';
+      html += `<div class="stat-value">${stats.successRate}%</div>`;
+      html += '</div>';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Verschiedene Fälle</div>';
+      html += `<div class="stat-value">${stats.uniqueCasesWorked}/${CASES.length}</div>`;
+      html += '</div>';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Lernzeit</div>';
+      html += `<div class="stat-value">${daysSince === 0 ? 'Heute' : daysSince + ' Tag' + (daysSince !== 1 ? 'e' : '')}</div>`;
+      html += '</div>';
+      
+      html += '</div>'; // stats-grid
+      html += '</div>'; // stats-section
+      
+      return html;
+    }
+    
+    // Rendert Performance nach Störungstyp
+    function renderDisorderPerformance() {
+      const performance = LearningManager.getPerformanceByDisorder();
+      
+      if (performance.length === 0) {
+        return '';
+      }
+      
+      let html = '<div class="stats-section">';
+      html += '<h3>🎯 Performance nach Störungstyp</h3>';
+      
+      performance.forEach(disorder => {
+        html += `<div style="margin-bottom: 16px;">`;
+        html += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">`;
+        html += `<span style="font-weight: 500;">${disorder.label}</span>`;
+        html += `<span>${disorder.correct}/${disorder.total} (${disorder.percentage}%)</span>`;
+        html += `</div>`;
+        html += `<div class="progress-bar-container">`;
+        html += `<div class="progress-bar ${disorder.status}" style="width: ${disorder.percentage}%">`;
+        if (disorder.percentage > 20) {
+          html += `${disorder.percentage}%`;
+        }
+        html += `</div>`;
+        html += `</div>`;
+        html += `</div>`;
+      });
+      
+      html += '</div>';
+      return html;
+    }
+    
+    // Rendert Fehlertyp-Analyse
+    function renderErrorAnalysis() {
+      const errorAnalysis = LearningManager.getErrorTypeAnalysis();
+      const stats = LearningManager.getBasicStats();
+      
+      if (stats.totalAttempts < 5) {
+        return ''; // Zu wenig Daten
+      }
+      
+      let html = '<div class="stats-section">';
+      html += '<h3>🔍 Fehleranalyse</h3>';
+      
+      html += '<div style="margin-bottom: 12px;">';
+      html += `<p style="margin: 0 0 8px 0; font-size: 0.9rem;">Von ${errorAnalysis.totalErrors} Fehlern:</p>`;
+      html += '<div class="stats-grid">';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Primärstörung falsch</div>';
+      html += `<div class="stat-value">${errorAnalysis.primaryErrors}</div>`;
+      html += `<div style="font-size: 0.75rem; opacity: 0.8;">${errorAnalysis.primaryErrorRate}% aller Versuche</div>`;
+      html += '</div>';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Kompensation falsch</div>';
+      html += `<div class="stat-value">${errorAnalysis.compensationErrors}</div>`;
+      html += `<div style="font-size: 0.75rem; opacity: 0.8;">${errorAnalysis.compensationErrorRate}% aller Versuche</div>`;
+      html += '</div>';
+      
+      html += '<div class="stat-item">';
+      html += '<div class="stat-label">Beides falsch</div>';
+      html += `<div class="stat-value">${errorAnalysis.bothErrors}</div>`;
+      html += `<div style="font-size: 0.75rem; opacity: 0.8;">${errorAnalysis.bothErrorRate}% aller Versuche</div>`;
+      html += '</div>';
+      
+      html += '</div>'; // stats-grid
+      
+      // Diagnose
+      let diagnosis = '';
+      if (errorAnalysis.mainWeakness === 'primary') {
+        diagnosis = '💡 <strong>Hauptschwäche:</strong> Erkennung der Primärstörung. Tipp: Schau zuerst auf den pH-Wert, dann auf pCO₂ und HCO₃⁻.';
+      } else if (errorAnalysis.mainWeakness === 'compensation') {
+        diagnosis = '💡 <strong>Hauptschwäche:</strong> Einschätzung der Kompensation. Tipp: Ist der andere Parameter auch außerhalb der Norm? Dann liegt Kompensation vor.';
+      } else if (errorAnalysis.mainWeakness === 'both') {
+        diagnosis = '💡 <strong>Hauptschwäche:</strong> Grundlegendes BGA-Verständnis. Tipp: Arbeite die Fälle Schritt für Schritt durch und nutze den Normwerte-Spickzettel.';
+      } else {
+        diagnosis = '✅ <strong>Sehr gut!</strong> Du arbeitest präzise und machst kaum Fehler.';
+      }
+      
+      html += `<div style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 6px; font-size: 0.85rem;">${diagnosis}</div>`;
+      html += '</div>';
+      
+      html += '</div>';
+      return html;
+    }
+    
+    // Rendert Trend-Analyse
+    function renderTrendAnalysis() {
+      const trend = LearningManager.getTrendAnalysis();
+      
+      if (!trend.available) {
+        return ''; // Zu wenig Daten
+      }
+      
+      let html = '<div class="stats-section">';
+      html += '<h3>📊 Lernkurve</h3>';
+      
+      let trendIcon = '';
+      if (trend.trend === 'strong-improvement') trendIcon = '🚀';
+      else if (trend.trend === 'improvement') trendIcon = '📈';
+      else if (trend.trend === 'stable') trendIcon = '➡️';
+      else trendIcon = '📉';
+      
+      html += `<div style="text-align: center; padding: 16px;">`;
+      html += `<div style="font-size: 2.5rem; margin-bottom: 8px;">${trendIcon}</div>`;
+      html += `<div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">${trend.message}</div>`;
+      html += `<div style="display: flex; justify-content: center; gap: 32px; margin-top: 16px;">`;
+      html += `<div>`;
+      html += `<div style="font-size: 0.85rem; opacity: 0.9;">Erste Hälfte</div>`;
+      html += `<div style="font-size: 1.8rem; font-weight: 700;">${trend.firstHalfRate}%</div>`;
+      html += `</div>`;
+      html += `<div style="font-size: 2rem; align-self: center;">→</div>`;
+      html += `<div>`;
+      html += `<div style="font-size: 0.85rem; opacity: 0.9;">Zweite Hälfte</div>`;
+      html += `<div style="font-size: 1.8rem; font-weight: 700;">${trend.secondHalfRate}%</div>`;
+      html += `</div>`;
+      html += `</div>`;
+      
+      if (trend.improvement > 0) {
+        html += `<div style="margin-top: 12px; font-size: 0.9rem; color: #10b981;">▲ +${trend.improvement} Prozentpunkte Verbesserung</div>`;
+      } else if (trend.improvement < 0) {
+        html += `<div style="margin-top: 12px; font-size: 0.9rem; color: #fbbf24;">▼ ${trend.improvement} Prozentpunkte</div>`;
+      }
+      
+      html += `</div>`;
+      html += '</div>';
+      
+      return html;
+    }
+    
+    // Rendert Verwechslungsmuster
+    function renderConfusionPatterns() {
+      const patterns = LearningManager.getConfusionPatterns();
+      
+      if (patterns.length === 0) {
+        return ''; // Keine systematischen Verwechslungen
+      }
+      
+      let html = '<div class="stats-section">';
+      html += '<h3>🔄 Häufige Verwechslungen</h3>';
+      html += `<p style="margin: 0 0 12px 0; font-size: 0.85rem; opacity: 0.9;">Diese Störungen verwechselst du öfter:</p>`;
+      
+      patterns.forEach(pattern => {
+        html += `<div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">`;
+        html += `<div style="font-weight: 600;">${getLabel(pattern.correct)} → ${getLabel(pattern.selected)}</div>`;
+        html += `<div style="opacity: 0.9;">${pattern.count}× verwechselt</div>`;
+        html += `</div>`;
+      });
+      
+      html += '</div>';
+      return html;
+    }
+    
+    // Rendert Empfehlungen
+    function renderRecommendations() {
+      const recommendations = LearningManager.getRecommendedCases();
+      
+      if (recommendations.length === 0) {
+        return '';
+      }
+      
+      let html = '<div class="stats-section">';
+      html += '<h3>💡 Empfehlungen für dich</h3>';
+      
+      recommendations.forEach(rec => {
+        html += '<div class="recommendation-card">';
+        html += `<h4>${rec.title}</h4>`;
+        html += `<p>${rec.description}</p>`;
+        html += '</div>';
+      });
+      
+      html += '</div>';
+      return html;
     }
     
     // Zeigt detaillierte Statistiken in einem Modal/Alert
