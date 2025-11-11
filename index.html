@@ -912,6 +912,219 @@
         }
         
         return recommendations;
+      },
+      
+      // ========================================
+      // SPRINT 3: Adaptive Fallauswahl & Spaced Repetition
+      // ========================================
+      
+      // Berechnet wann ein Fall zur Wiederholung fällig ist (Spaced Repetition)
+      getRepetitionDate(correctCount) {
+        // Intervalle in Tagen: 1, 3, 7, 14, 30
+        const intervals = [1, 3, 7, 14, 30];
+        const index = Math.min(correctCount - 1, intervals.length - 1);
+        return intervals[index];
+      },
+      
+      // Findet Fälle die zur Wiederholung fällig sind
+      getDueForRepetition() {
+        const caseHistory = {};
+        const now = new Date();
+        
+        // Sammle Historie für jeden Fall
+        this.profile.attempts.forEach(attempt => {
+          if (!caseHistory[attempt.caseId]) {
+            caseHistory[attempt.caseId] = {
+              caseId: attempt.caseId,
+              correctStreak: 0,
+              lastCorrectDate: null,
+              totalAttempts: 0
+            };
+          }
+          
+          caseHistory[attempt.caseId].totalAttempts++;
+          
+          if (attempt.isCorrect) {
+            caseHistory[attempt.caseId].correctStreak++;
+            caseHistory[attempt.caseId].lastCorrectDate = new Date(attempt.timestamp);
+          } else {
+            // Bei Fehler wird Streak zurückgesetzt
+            caseHistory[attempt.caseId].correctStreak = 0;
+          }
+        });
+        
+        // Prüfe welche Fälle fällig sind
+        const dueForRepetition = [];
+        
+        for (const caseId in caseHistory) {
+          const history = caseHistory[caseId];
+          
+          // Nur Fälle die mindestens einmal richtig waren
+          if (history.correctStreak > 0 && history.lastCorrectDate) {
+            const daysInterval = this.getRepetitionDate(history.correctStreak);
+            const nextDueDate = new Date(history.lastCorrectDate);
+            nextDueDate.setDate(nextDueDate.getDate() + daysInterval);
+            
+            // Ist der Fall überfällig?
+            if (now >= nextDueDate) {
+              const daysOverdue = Math.floor((now - nextDueDate) / (1000 * 60 * 60 * 24));
+              dueForRepetition.push({
+                caseId: parseInt(caseId),
+                daysOverdue: daysOverdue,
+                correctStreak: history.correctStreak,
+                priority: daysOverdue * 10 + history.correctStreak // Höhere Priorität je länger überfällig
+              });
+            }
+          }
+        }
+        
+        // Sortiere nach Priorität (am längsten überfällig zuerst)
+        dueForRepetition.sort((a, b) => b.priority - a.priority);
+        
+        return dueForRepetition;
+      },
+      
+      // Findet Fälle aus Schwachstellen-Bereichen
+      getWeaknessCases() {
+        const performance = this.getPerformanceByDisorder();
+        const weakDisorders = performance.filter(p => p.status === 'needs-work' && p.total >= 2);
+        
+        if (weakDisorders.length === 0) {
+          return [];
+        }
+        
+        // Sammle alle Fälle aus schwachen Bereichen
+        const weaknessCaseIds = [];
+        weakDisorders.forEach(disorder => {
+          CASES.forEach(c => {
+            if (c.primary === disorder.type) {
+              weaknessCaseIds.push(c.id);
+            }
+          });
+        });
+        
+        return weaknessCaseIds;
+      },
+      
+      // Findet noch unbearbeitete Fälle
+      getUnseenCases() {
+        const seenCaseIds = new Set(this.profile.attempts.map(a => a.caseId));
+        return CASES.filter(c => !seenCaseIds.has(c.id)).map(c => c.id);
+      },
+      
+      // Prüft ob User gerade frustriert sein könnte
+      isUserFrustrated() {
+        const recentAttempts = this.profile.attempts.slice(-3);
+        if (recentAttempts.length < 3) return false;
+        
+        // Frustration = 3 falsche Antworten in Folge
+        return recentAttempts.every(a => !a.isCorrect);
+      },
+      
+      // Findet einen "Erfolgsfall" zur Motivation
+      getMotivationalCase() {
+        const successfulCases = {};
+        
+        this.profile.attempts.forEach(attempt => {
+          if (attempt.isCorrect) {
+            if (!successfulCases[attempt.caseId]) {
+              successfulCases[attempt.caseId] = 0;
+            }
+            successfulCases[attempt.caseId]++;
+          }
+        });
+        
+        // Finde Fall mit meisten richtigen Antworten
+        let bestCase = null;
+        let maxCorrect = 0;
+        
+        for (const caseId in successfulCases) {
+          if (successfulCases[caseId] > maxCorrect) {
+            maxCorrect = successfulCases[caseId];
+            bestCase = parseInt(caseId);
+          }
+        }
+        
+        return bestCase;
+      },
+      
+      // Hauptmethode: Wählt den optimalen nächsten Fall
+      getOptimalNextCase(currentMode = 'basic') {
+        const stats = this.getBasicStats();
+        
+        // Spezialfall: Zu wenig Daten, gib zufälligen passenden Fall
+        if (stats.totalAttempts < 3) {
+          const availableCases = CASES.filter(c => c.mode === currentMode || currentMode === 'mixed');
+          const randomCase = availableCases[Math.floor(Math.random() * availableCases.length)];
+          return {
+            caseId: randomCase.id,
+            reason: 'exploration',
+            message: 'Lass uns mit einem Fall starten!'
+          };
+        }
+        
+        // Schritt 1: Prüfe auf Frustration
+        if (this.isUserFrustrated()) {
+          const motivationalCase = this.getMotivationalCase();
+          if (motivationalCase) {
+            return {
+              caseId: motivationalCase,
+              reason: 'motivation',
+              message: '💪 Hier ein Fall den du schon kennst - du schaffst das!'
+            };
+          }
+        }
+        
+        // Schritt 2: Höchste Priorität - Fällige Wiederholungen
+        const dueRepetitions = this.getDueForRepetition();
+        if (dueRepetitions.length > 0) {
+          const mostDue = dueRepetitions[0];
+          return {
+            caseId: mostDue.caseId,
+            reason: 'repetition',
+            message: `🔄 Wiederholung: Diesen Fall hattest du vor ${mostDue.daysOverdue + this.getRepetitionDate(mostDue.correctStreak)} Tagen richtig.`
+          };
+        }
+        
+        // Schritt 3: Mittlere Priorität - Schwachstellen üben
+        const weaknessCases = this.getWeaknessCases();
+        if (weaknessCases.length > 0) {
+          // Wähle zufälligen Fall aus Schwachstellen
+          const randomWeaknessCase = weaknessCases[Math.floor(Math.random() * weaknessCases.length)];
+          return {
+            caseId: randomWeaknessCase,
+            reason: 'weakness',
+            message: '🎯 Dieser Fall trainiert einen Bereich wo du noch üben kannst.'
+          };
+        }
+        
+        // Schritt 4: Niedrige Priorität - Neue Fälle erkunden
+        const unseenCases = this.getUnseenCases();
+        if (unseenCases.length > 0) {
+          // Filtere nach aktuellem Modus
+          const suitableCases = unseenCases.filter(caseId => {
+            const caseObj = CASES.find(c => c.id === caseId);
+            return caseObj && (caseObj.mode === currentMode || currentMode === 'mixed');
+          });
+          
+          if (suitableCases.length > 0) {
+            const randomNewCase = suitableCases[Math.floor(Math.random() * suitableCases.length)];
+            return {
+              caseId: randomNewCase,
+              reason: 'exploration',
+              message: '✨ Ein neuer Fall zur Erkundung!'
+            };
+          }
+        }
+        
+        // Fallback: Komplett zufällig
+        const availableCases = CASES.filter(c => c.mode === currentMode || currentMode === 'mixed');
+        const randomCase = availableCases[Math.floor(Math.random() * availableCases.length)];
+        return {
+          caseId: randomCase.id,
+          reason: 'random',
+          message: null
+        };
       }
     };
 
